@@ -6,7 +6,7 @@ using PepperDash.Core;
 using PepperDash.Essentials.Core;
 using PepperDash.Essentials.Core.Bridges;
 
-namespace EssentialsPluginTemplate
+namespace PepperDash.Essentials.Displays
 {
 	/// <summary>
 	/// Plugin device template for third party devices that use IBasicCommunication
@@ -17,12 +17,12 @@ namespace EssentialsPluginTemplate
 	/// <example>
 	/// "EssentialsPluginDeviceTemplate" renamed to "SamsungMdcDevice"
 	/// </example>
-	public class EssentialsPluginTemplateDevice : EssentialsBridgeableDevice
+	public class PanasonicProjectorController : TwoWayDisplayBase
     {
         /// <summary>
         /// It is often desirable to store the config
         /// </summary>
-        private EssentialsPluginConfigObjectTemplate _config;
+        private PanasonicProjectorControllerConfig _config;
 
         #region IBasicCommunication Properties and Constructor.  Remove if not needed.
 
@@ -91,7 +91,7 @@ namespace EssentialsPluginTemplate
 		/// <param name="name"></param>
 		/// <param name="config"></param>
 		/// <param name="comms"></param>
-		public EssentialsPluginTemplateDevice(string key, string name, EssentialsPluginConfigObjectTemplate config, IBasicCommunication comms)
+		public PanasonicProjectorController(string key, string name, PanasonicProjectorControllerConfig config, IBasicCommunication comms)
 			: base(key, name)
 		{
 			Debug.Console(0, this, "Constructing new {0} instance", name);
