@@ -1,7 +1,7 @@
 ﻿using System;
-using Crestron.SimplSharp.Cryptography;
 using System.Text;
 using Crestron.SimplSharp;
+using Crestron.SimplSharp.Cryptography;
 using Crestron.SimplSharpPro.DeviceSupport;
 using PepperDash.Core;
 using PepperDash.Essentials.Core;
@@ -30,30 +30,6 @@ namespace PepperDash.Essentials.Displays
         private readonly CrestronQueue<string> _txQueue;
         private eInputTypes _currentInput;
 
-        public string CurrentInput
-        {
-            get { return _currentInput.ToString(); }
-            set
-            {
-                if(_currentInput.ToString() == value)
-                {
-                    return;
-                }
-
-                try
-                {
-                    _currentInput = (eInputTypes) Enum.Parse(typeof (eInputTypes), value, true);
-                }
-                catch
-                {
-                    _currentInput = eInputTypes.None;
-                }
-
-                CurrentInputFeedback.FireUpdate();
-            }
-        
-        }
-
         private string _hash;
 
         #region IBasicCommunication Properties and Constructor.  Remove if not needed.
@@ -71,6 +47,8 @@ namespace PepperDash.Essentials.Displays
         private readonly GenericCommunicationMonitor _commsMonitor;
 
         private string _currentCommand;
+
+        private bool _powerIsOn;
 
         /// <summary>
         /// Plugin device constructor for devices that need IBasicCommunication
@@ -127,17 +105,15 @@ namespace PepperDash.Essentials.Displays
             SetUpInputPorts();
         }
 
-        private bool _powerIsOn;
-
         public bool PowerIsOn
         {
-            get
-            {
-                return _powerIsOn;
-            }
+            get { return _powerIsOn; }
             set
             {
-                if (value == _powerIsOn) return;
+                if (value == _powerIsOn)
+                {
+                    return;
+                }
 
                 _powerIsOn = value;
 
@@ -314,13 +290,13 @@ namespace PepperDash.Essentials.Displays
             //power query
             if (_currentCommand.ToLower().Contains("qpw"))
             {
-                PowerIsOn = response == "0001";
+                PowerIsOn = response.Contains("0001");
                 return;
             }
 
             if (_currentCommand.ToLower().Contains("iis"))
             {
-                
+                CurrentInput = response.Trim();
             }
         }
 
@@ -363,7 +339,7 @@ namespace PepperDash.Essentials.Displays
         {
             SendText(_commandBuilder.GetCommand("IIS", input.ToString().ToUpper()));
 
-            _currentInput = input;
+            CurrentInput = input.ToString();
         }
 
         #endregion
@@ -432,5 +408,28 @@ namespace PepperDash.Essentials.Displays
         }
 
         #endregion
+
+        public string CurrentInput
+        {
+            get { return _currentInput.ToString(); }
+            set
+            {
+                if (_currentInput.ToString() == value)
+                {
+                    return;
+                }
+
+                try
+                {
+                    _currentInput = (eInputTypes) Enum.Parse(typeof (eInputTypes), value, true);
+                }
+                catch
+                {
+                    _currentInput = eInputTypes.None;
+                }
+
+                CurrentInputFeedback.FireUpdate();
+            }
+        }
     }
 }
