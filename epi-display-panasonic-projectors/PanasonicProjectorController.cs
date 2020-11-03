@@ -230,6 +230,11 @@ namespace PepperDash.Essentials.Displays
             {
                 StatusFeedback.FireUpdate();
             }
+
+            if (!args.Client.IsConnected && !_txQueue.IsEmpty)
+            {
+                _comms.Connect();
+            }
         }
 
         private void Handle_LineRecieved(object sender, GenericCommMethodReceiveTextArgs args)
