@@ -36,7 +36,7 @@ namespace PepperDash.Essentials.Displays
         public PanasonicProjectorControllerFactory()
         {
             // Set the minimum Essentials Framework Version
-			MinimumEssentialsFrameworkVersion = "1.6.6";
+			MinimumEssentialsFrameworkVersion = "1.7.6";
 
             // In the constructor we initialize the list with the typenames that will build an instance of this device
             TypeNames = new List<string> { "panasonicProjector" };
