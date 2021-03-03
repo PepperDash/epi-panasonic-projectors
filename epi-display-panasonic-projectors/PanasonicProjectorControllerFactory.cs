@@ -39,7 +39,7 @@ namespace PepperDash.Essentials.Displays
 			MinimumEssentialsFrameworkVersion = "1.6.6";
 
             // In the constructor we initialize the list with the typenames that will build an instance of this device
-            TypeNames = new List<string>() { "panasonicProjector" };
+            TypeNames = new List<string> { "panasonicProjector" };
         }
         
 		/// <summary>
