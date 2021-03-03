@@ -70,7 +70,7 @@ This plugin is designed to work with Panasonic projectors controlled via TCP/IP 
 
 ## License
 
-Provided under MIT license
+Provided under [MIT License](LICENSE.md)
 
 # Contributing
 
