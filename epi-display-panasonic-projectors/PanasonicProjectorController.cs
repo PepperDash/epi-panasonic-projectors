@@ -6,6 +6,7 @@ using Crestron.SimplSharpPro.DeviceSupport;
 using PepperDash.Core;
 using PepperDash.Essentials.Core;
 using PepperDash.Essentials.Core.Bridges;
+using PepperDash.Essentials.Core.Routing;
 using PepperDash_Essentials_Core.Queues;
 
 namespace PepperDash.Essentials.Displays
@@ -163,31 +164,31 @@ namespace PepperDash.Essentials.Displays
 
         private void SetUpInputPorts()
         {
-            var computer1 = new RoutingInputPort(String.Format("{0}-computer1", Key), eRoutingSignalType.Video,
+            var computer1 = new RoutingInputPort(RoutingPortNames.VgaIn, eRoutingSignalType.Video,
                 eRoutingPortConnectionType.Vga, new Action(() => SetInput(eInputTypes.Rg1)), this);
 
-            var computer2 = new RoutingInputPort(String.Format("{0}-computer2", Key), eRoutingSignalType.Video,
+            var computer2 = new RoutingInputPort(RoutingPortNames.VgaIn1, eRoutingSignalType.Video,
                 eRoutingPortConnectionType.Vga, new Action(() => SetInput(eInputTypes.Rg2)), this);
 
-            var video = new RoutingInputPort(String.Format("{0}-video", Key), eRoutingSignalType.Video,
+            var video = new RoutingInputPort(RoutingPortNames.CompositeIn, eRoutingSignalType.Video,
                 eRoutingPortConnectionType.Composite, new Action(() => SetInput(eInputTypes.Vid)), this);
 
-            var sVideo = new RoutingInputPort(String.Format("{0}-s-video", Key), eRoutingSignalType.Video,
+            var sVideo = new RoutingInputPort(RoutingPortNames.ComponentIn, eRoutingSignalType.Video,
                 eRoutingPortConnectionType.Component, new Action(() => SetInput(eInputTypes.Svd)), this);
 
-            var dvi = new RoutingInputPort(String.Format("{0}-dvi", Key), eRoutingSignalType.Video,
+            var dvi = new RoutingInputPort(RoutingPortNames.DviIn, eRoutingSignalType.Video,
                 eRoutingPortConnectionType.Dvi, new Action(() => SetInput(eInputTypes.Dvi)), this);
 
-            var hdmi1 = new RoutingInputPort(String.Format("{0}-hdmi-1", Key), eRoutingSignalType.Video,
+            var hdmi1 = new RoutingInputPort(RoutingPortNames.HdmiIn1, eRoutingSignalType.Video,
                 eRoutingPortConnectionType.Hdmi, new Action(() => SetInput(eInputTypes.Hd1)), this);
 
-            var hdmi2 = new RoutingInputPort(String.Format("{0}-hdmi-2", Key), eRoutingSignalType.Video,
+            var hdmi2 = new RoutingInputPort(RoutingPortNames.HdmiIn2, eRoutingSignalType.Video,
                 eRoutingPortConnectionType.Hdmi, new Action(() => SetInput(eInputTypes.Hd2)), this);
 
-            var sdi = new RoutingInputPort(String.Format("{0}-sdi", Key), eRoutingSignalType.Video,
+            var sdi = new RoutingInputPort("Sdi", eRoutingSignalType.Video,
                 eRoutingPortConnectionType.Sdi, new Action(() => SetInput(eInputTypes.Sd1)), this);
 
-            var digitalLink = new RoutingInputPort(String.Format("{0}-dl", Key), eRoutingSignalType.Video,
+            var digitalLink = new RoutingInputPort(RoutingPortNames.DmIn, eRoutingSignalType.Video,
                 eRoutingPortConnectionType.DmCat, new Action(() => SetInput(eInputTypes.Dl1)), this);
 
             InputPorts.Add(computer1);
