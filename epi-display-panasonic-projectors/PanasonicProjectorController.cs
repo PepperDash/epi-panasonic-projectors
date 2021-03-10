@@ -162,6 +162,12 @@ namespace PepperDash.Essentials.Displays
         /// </summary>
         public IntFeedback StatusFeedback { get; private set; }
 
+        public override bool CustomActivate()
+        {
+            _commsMonitor.Start();
+            return base.CustomActivate();
+        }
+
         private void SetUpInputPorts()
         {
             var computer1 = new RoutingInputPort(RoutingPortNames.VgaIn, eRoutingSignalType.Video,
@@ -253,6 +259,15 @@ namespace PepperDash.Essentials.Displays
         /// <param name="text">Command to be sent</param>		
         public void SendText(string text)
         {
+            if (_config.Control.Method == eControlMethod.Com)
+            {
+                _currentCommand = text;
+
+                _comms.SendText(text);
+
+                return;
+            }
+
             _txQueue.Enqueue(text);
 
             if (!_comms.IsConnected)
@@ -269,7 +284,7 @@ namespace PepperDash.Essentials.Displays
         /// </remarks>
         public void Poll()
         {
-            SendText(_commandBuilder.GetCommand("QPW", ""));
+            SendText(_commandBuilder.GetCommand("QPW"));
         }
 
         private void ParseResponse(string response)
@@ -278,13 +293,13 @@ namespace PepperDash.Essentials.Displays
             if (response.Contains("ntcontrol 1"))
             {
                 _hash = GetHash(response);
-                DequeueAndSend();
+                DequeueAndSend(null);
                 return;
             }
 
             if (response.Contains("ntcontrol 0"))
             {
-                DequeueAndSend();
+                DequeueAndSend(null);
                 return;
             }
 
@@ -296,7 +311,7 @@ namespace PepperDash.Essentials.Displays
             //power query
             if (_currentCommand.ToLower().Contains("qpw"))
             {
-                PowerIsOn = response.Contains("0001");
+                PowerIsOn = response.Contains("0001") || response.Contains("001");
                 return;
             }
 
@@ -306,11 +321,11 @@ namespace PepperDash.Essentials.Displays
             }
         }
 
-        private void DequeueAndSend()
+        private object DequeueAndSend(object notUsed)
         {
             if (_txQueue.IsEmpty)
             {
-                return;
+                return null;
             }
 
             var cmdToSend = _txQueue.Dequeue(10);
@@ -318,12 +333,14 @@ namespace PepperDash.Essentials.Displays
             if (String.IsNullOrEmpty(cmdToSend))
             {
                 Debug.Console(1, this, "Unable to get command to send");
-                return;
+                return null;
             }
 
             _currentCommand = cmdToSend;
 
             _comms.SendText(String.IsNullOrEmpty(_hash) ? cmdToSend : String.Format("{0}{1}", _hash, cmdToSend));
+
+            return null;
         }
 
         private string GetHash(string randomNumber)
@@ -384,15 +401,60 @@ namespace PepperDash.Essentials.Displays
 
         public override void ExecuteSwitch(object selector)
         {
-            var handler = selector as Action;
-
-            if (handler == null)
+            /*
+             * if (_PowerIsOn)
+                (selector as Action)();
+            else // if power is off, wait until we get on FB to send it. 
             {
-                Debug.Console(1, this, "Unable to switch using selector {0}", selector);
-                return;
+                // One-time event handler to wait for power on before executing switch
+                EventHandler<FeedbackEventArgs> handler = null; // necessary to allow reference inside lambda to handler
+                handler = (o, a) =>
+                {
+                    if (!_IsWarmingUp) // Done warming
+                    {
+                        IsWarmingUpFeedback.OutputChange -= handler;
+                        (selector as Action)();
+                    }
+                };
+                IsWarmingUpFeedback.OutputChange += handler; // attach and wait for on FB
+                PowerOn();
             }
+             */
+            if (PowerIsOn)
+            {
+                var handler = selector as Action;
 
-            handler();
+                if (handler == null)
+                {
+                    Debug.Console(1, this, "Unable to switch using selector {0}", selector);
+                    return;
+                }
+
+                handler();
+            }
+            else
+            {
+                EventHandler<FeedbackEventArgs> handler = null;
+                var inputSelector = selector as Action;
+                handler = (o, a) =>
+                {
+                    if (!PowerIsOn)
+                    {
+                        return;
+                    }
+
+                    PowerIsOnFeedback.OutputChange -= handler;
+                    if (inputSelector == null)
+                    {
+                        return;
+                    }
+
+                    inputSelector();
+                };
+
+                PowerIsOnFeedback.OutputChange += handler;
+                PowerOn();
+            }
         }
 
         #endregion

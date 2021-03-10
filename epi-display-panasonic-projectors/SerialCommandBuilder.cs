@@ -11,8 +11,8 @@ namespace PepperDash.Essentials.Displays
 
         private readonly string _id;
 
-        private const string CommandWithParameterFormat = "\x02AD{0};{1}:{2}\x03";
-        private const string CommandWithoutParameterFormat = "\x02AD{0};{1}\x03";
+        private const string CommandWithParameterFormat = "AD{0};{1}:{2}";
+        private const string CommandWithoutParameterFormat = "AD{0};{1}";
 
         public SerialCommandBuilder(string id)
         {
@@ -21,12 +21,14 @@ namespace PepperDash.Essentials.Displays
 
         public string GetCommand(string cmd, string parameter)
         {
-            return String.Format(CommandWithParameterFormat, _id, cmd, parameter);
+            var cmdToSend = String.Format("\x02{0}\x03", CommandWithParameterFormat);
+            return String.Format(cmdToSend, _id, cmd, parameter);
         }
 
         public string GetCommand(string cmd)
         {
-            return String.Format(CommandWithoutParameterFormat, _id, cmd);
+            var cmdToSend = String.Format("\x02{0}\x03", CommandWithoutParameterFormat);
+            return String.Format(cmdToSend, _id, cmd);
         }
     }
 }
