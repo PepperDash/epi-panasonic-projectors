@@ -336,15 +336,19 @@ namespace PepperDash.Essentials.Displays
             //power query
             if (_currentCommand.ToLower().Contains("qpw"))
             {
-                if (_powerOnIgnoreFb && response.Contains("0001") || response.Contains("001"))
+                if (_powerOnIgnoreFb && (response.Contains("0001") || response.Contains("001")))
                 {
                     _powerOnIgnoreFb = false;
+                    return;
                 }
 
-                if (!(_powerOnIgnoreFb && response.Contains("0000") || response.Contains("000")))
+                if (!(_powerOnIgnoreFb && (response.Contains("0000") || response.Contains("000"))))
                 {
                     PowerIsOn = response.Contains("0001") || response.Contains("001");
+                    return;
                 }
+
+                PowerIsOn = response.Contains("0001") || response.Contains("001");
                 return;
             }
 
@@ -419,7 +423,7 @@ namespace PepperDash.Essentials.Displays
 
         public override void PowerOn()
         {
-            if (PowerIsOnFeedback.BoolValue || _isWarming || _isCooling)
+            if (PowerIsOn || _isWarming || _isCooling)
             {
                 return;
             }
@@ -442,7 +446,7 @@ namespace PepperDash.Essentials.Displays
 
         public override void PowerOff()
         {
-            if (!PowerIsOnFeedback.BoolValue || _isWarming || _isCooling)
+            if (!PowerIsOn || _isWarming || _isCooling)
             {
                 return;
             }
