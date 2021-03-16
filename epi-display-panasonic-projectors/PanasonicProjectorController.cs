@@ -72,6 +72,7 @@ namespace PepperDash.Essentials.Displays
             Debug.Console(0, this, "Constructing new {0} instance", name);
 
             _rxQueue = new GenericQueue(String.Format("{0}-rxQueue", Key));
+
             _txQueue = new CrestronQueue<string>(50);
 
             _config = config;
@@ -136,6 +137,8 @@ namespace PepperDash.Essentials.Displays
             get { return _powerIsOn; }
             set
             {
+                Debug.Console(1, this, "Setting powerIsOn to {0} from {1}", value, _powerIsOn);
+
                 if (value == _powerIsOn)
                 {
                     return;
@@ -334,21 +337,21 @@ namespace PepperDash.Essentials.Displays
             }
 
             //power query
-            if (_currentCommand.ToLower().Contains("qpw"))
+            if (_currentCommand.ToLower().Contains("qpw")) 
             {
-                if (_powerOnIgnoreFb && (response.Contains("0001") || response.Contains("001")))
+                if (_powerOnIgnoreFb && (response.Contains("001") || response.ToLower().Contains("pon")))
                 {
                     _powerOnIgnoreFb = false;
                     return;
                 }
 
-                if (!(_powerOnIgnoreFb && (response.Contains("0000") || response.Contains("000"))))
+                if (!(_powerOnIgnoreFb && (response.Contains("000") || response.ToLower().Contains("pof"))))
                 {
-                    PowerIsOn = response.Contains("0001") || response.Contains("001");
+                    PowerIsOn = response.Contains("001") || response.ToLower().Contains("pon");
                     return;
                 }
 
-                PowerIsOn = response.Contains("0001") || response.Contains("001");
+                PowerIsOn = response.Contains("001") || response.ToLower().Contains("pon");
                 return;
             }
 
@@ -408,7 +411,14 @@ namespace PepperDash.Essentials.Displays
 
         protected override Func<bool> PowerIsOnFeedbackFunc
         {
-            get { return () => PowerIsOn; }
+            get
+            {
+                return () =>
+                {
+                    Debug.Console(1, this, "Updating PowerIsOnFeedback to {0}", PowerIsOn);
+                    return PowerIsOn;
+                };
+            }
         }
 
         protected override Func<bool> IsCoolingDownFeedbackFunc
@@ -438,9 +448,8 @@ namespace PepperDash.Essentials.Displays
             WarmupTimer = new CTimer(o =>
             {
                 _isWarming = false;
-                _powerIsOn = true;
                 IsWarmingUpFeedback.FireUpdate();
-                PowerIsOnFeedback.FireUpdate();
+                PowerIsOn = true;
             }, WarmupTime);
         }
 
@@ -459,9 +468,8 @@ namespace PepperDash.Essentials.Displays
             CooldownTimer = new CTimer(o =>
             {
                 _isCooling = false;
-                _powerIsOn = true;
+                PowerIsOn = false;
                 IsCoolingDownFeedback.FireUpdate();
-                PowerIsOnFeedback.FireUpdate();
             }, CooldownTime);
         }
 
@@ -515,6 +523,7 @@ namespace PepperDash.Essentials.Displays
                     }
 
                     IsWarmingUpFeedback.OutputChange -= handler;
+
                     if (inputSelector == null)
                     {
                         return;
