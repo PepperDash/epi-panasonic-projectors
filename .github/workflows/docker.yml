@@ -82,24 +82,24 @@ jobs:
         shell: powershell
         run: |
           function Update-SourceVersion {
-          Param ([string]$Version)
-          #$fullVersion = $Version
-          $baseVersion = [regex]::Match($Version, "(\d+.\d+.\d+).*").captures.groups[1].value
-          $NewAssemblyVersion = 'AssemblyVersion("‘ + $baseVersion + ‘.*")'
-          Write-Output "AssemblyVersion = $NewAssemblyVersion"
-          $NewAssemblyInformationalVersion = 'AssemblyInformationalVersion("' + $Version + '")'
-          Write-Output "AssemblyInformationalVersion = $NewAssemblyInformationalVersion"
-          foreach ($o in $input) {
-              Write-output $o.FullName
-              $TmpFile = $o.FullName + ".tmp"
-              get-content $o.FullName |
-              ForEach-Object {
-                  $_ -replace 'AssemblyVersion\(".*"\)', $NewAssemblyVersion } |
-              ForEach-Object {
-                  $_ -replace 'AssemblyInformationalVersion\(".*"\)', $NewAssemblyInformationalVersion
-              }  > $TmpFile 
-              move-item $TmpFile $o.FullName -force
-            }
+            Param ([string]$Version)
+            #$fullVersion = $Version
+            $baseVersion = [regex]::Match($Version, "(\d+.\d+.\d+).*").captures.groups[1].value
+            $NewAssemblyVersion = 'AssemblyVersion("' + $baseVersion + '.*")'
+            Write-Output "AssemblyVersion = $NewAssemblyVersion"
+            $NewAssemblyInformationalVersion = 'AssemblyInformationalVersion("' + $Version + '")'
+            Write-Output "AssemblyInformationalVersion = $NewAssemblyInformationalVersion"
+            foreach ($o in $input) {
+                Write-output $o.FullName
+                $TmpFile = $o.FullName + ".tmp"
+                get-content $o.FullName |
+                ForEach-Object {
+                    $_ -replace 'AssemblyVersion\(".*"\)', $NewAssemblyVersion } |
+                ForEach-Object {
+                    $_ -replace 'AssemblyInformationalVersion\(".*"\)', $NewAssemblyInformationalVersion
+                }  > $TmpFile 
+                move-item $TmpFile $o.FullName -force
+              }
           }
           function Update-AllAssemblyInfoFiles ( $version ) {
               foreach ($file in "AssemblyInfo.cs", "AssemblyInfo.vb" ) {

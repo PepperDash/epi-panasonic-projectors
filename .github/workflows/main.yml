@@ -41,7 +41,7 @@ jobs:
           Param ([string]$Version)
           #$fullVersion = $Version
           $baseVersion = [regex]::Match($Version, "(\d+.\d+.\d+).*").captures.groups[1].value
-          $NewAssemblyVersion = 'AssemblyVersion("‘ + $baseVersion + ‘.*")'
+          $NewAssemblyVersion = 'AssemblyVersion("' + $baseVersion + '.*")'
           Write-Output "AssemblyVersion = $NewAssemblyVersion"
           $NewAssemblyInformationalVersion = 'AssemblyInformationalVersion("' + $Version + '")'
           Write-Output "AssemblyInformationalVersion = $NewAssemblyInformationalVersion"
