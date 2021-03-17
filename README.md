@@ -30,7 +30,9 @@ This plugin is designed to work with Panasonic projectors controlled via TCP/IP 
       "controlPortDevKey": "processor",
       "controlPortNumber": 1
     },
-    "id": "01"
+    "id": "01",
+    "warmupTimeInSeconds":1,
+    "cooldownTimeInSeconds":2
   }
 }
 ```
@@ -38,6 +40,7 @@ This plugin is designed to work with Panasonic projectors controlled via TCP/IP 
 #### Notes
 
 - Valid `id` values are ZZ, 01 to 64, and 0A to 0Z
+- `warmupTimeInSeconds` and `cooldownTimeInSeconds` are optional. If they are omitted, the plugin will default to 1 second and 2 seconds respectively.
 
 ### TCP/IP
 

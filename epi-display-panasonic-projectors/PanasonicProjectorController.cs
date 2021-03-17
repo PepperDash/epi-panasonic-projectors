@@ -22,6 +22,13 @@ namespace PepperDash.Essentials.Displays
     /// </example>
     public class PanasonicProjectorController : TwoWayDisplayBase, IBridgeAdvanced
     {
+        private const long DefaultWarmUpTimeMs = 1000;
+        private const long DefautlCooldownTimeMs = 2000;
+
+        private bool _isWarming;
+        private bool _isCooling;
+        private bool _powerOnIgnoreFb;
+
         private readonly PanasonicProjectorControllerConfig _config;
 
         private readonly MD5CryptoServiceProvider _md5Provider;
@@ -65,9 +72,28 @@ namespace PepperDash.Essentials.Displays
             Debug.Console(0, this, "Constructing new {0} instance", name);
 
             _rxQueue = new GenericQueue(String.Format("{0}-rxQueue", Key));
+
             _txQueue = new CrestronQueue<string>(50);
 
             _config = config;
+
+            if (_config.WarmupTimeInSeconds == default(long))
+            {
+                WarmupTime = (uint) DefaultWarmUpTimeMs;
+            }
+            else
+            {
+                WarmupTime = (uint) (_config.WarmupTimeInSeconds*1000);
+            }
+
+            if (_config.CooldownTimeInSeconds == default(long))
+            {
+                CooldownTime = (uint)DefaultWarmUpTimeMs;
+            }
+            else
+            {
+                CooldownTime = (uint)(_config.WarmupTimeInSeconds * 1000);
+            }
 
             ConnectFeedback = new BoolFeedback(() => Connect);
             OnlineFeedback = new BoolFeedback(() => _commsMonitor.IsOnline);
@@ -111,6 +137,8 @@ namespace PepperDash.Essentials.Displays
             get { return _powerIsOn; }
             set
             {
+                Debug.Console(1, this, "Setting powerIsOn to {0} from {1}", value, _powerIsOn);
+
                 if (value == _powerIsOn)
                 {
                     return;
@@ -161,6 +189,12 @@ namespace PepperDash.Essentials.Displays
         /// Reports socket status feedback through the bridge
         /// </summary>
         public IntFeedback StatusFeedback { get; private set; }
+
+        public override bool CustomActivate()
+        {
+            _commsMonitor.Start();
+            return base.CustomActivate();
+        }
 
         private void SetUpInputPorts()
         {
@@ -253,6 +287,15 @@ namespace PepperDash.Essentials.Displays
         /// <param name="text">Command to be sent</param>		
         public void SendText(string text)
         {
+            if (_config.Control.Method == eControlMethod.Com)
+            {
+                _currentCommand = text;
+
+                _comms.SendText(text);
+
+                return;
+            }
+
             _txQueue.Enqueue(text);
 
             if (!_comms.IsConnected)
@@ -269,7 +312,7 @@ namespace PepperDash.Essentials.Displays
         /// </remarks>
         public void Poll()
         {
-            SendText(_commandBuilder.GetCommand("QPW", ""));
+            SendText(_commandBuilder.GetCommand("QPW"));
         }
 
         private void ParseResponse(string response)
@@ -278,13 +321,13 @@ namespace PepperDash.Essentials.Displays
             if (response.Contains("ntcontrol 1"))
             {
                 _hash = GetHash(response);
-                DequeueAndSend();
+                DequeueAndSend(null);
                 return;
             }
 
             if (response.Contains("ntcontrol 0"))
             {
-                DequeueAndSend();
+                DequeueAndSend(null);
                 return;
             }
 
@@ -294,23 +337,35 @@ namespace PepperDash.Essentials.Displays
             }
 
             //power query
-            if (_currentCommand.ToLower().Contains("qpw"))
+            if (_currentCommand.ToLower().Contains("qpw")) 
             {
-                PowerIsOn = response.Contains("0001");
+                if (_powerOnIgnoreFb && (response.Contains("001") || response.ToLower().Contains("pon")))
+                {
+                    _powerOnIgnoreFb = false;
+                    return;
+                }
+
+                if (!(_powerOnIgnoreFb && (response.Contains("000") || response.ToLower().Contains("pof"))))
+                {
+                    PowerIsOn = response.Contains("001") || response.ToLower().Contains("pon");
+                    return;
+                }
+
+                PowerIsOn = response.Contains("001") || response.ToLower().Contains("pon");
                 return;
             }
 
             if (_currentCommand.ToLower().Contains("iis"))
             {
-                CurrentInput = response.Trim();
+                CurrentInput = response.Replace("iis:", "").Trim();
             }
         }
 
-        private void DequeueAndSend()
+        private object DequeueAndSend(object notUsed)
         {
             if (_txQueue.IsEmpty)
             {
-                return;
+                return null;
             }
 
             var cmdToSend = _txQueue.Dequeue(10);
@@ -318,12 +373,14 @@ namespace PepperDash.Essentials.Displays
             if (String.IsNullOrEmpty(cmdToSend))
             {
                 Debug.Console(1, this, "Unable to get command to send");
-                return;
+                return null;
             }
 
             _currentCommand = cmdToSend;
 
             _comms.SendText(String.IsNullOrEmpty(_hash) ? cmdToSend : String.Format("{0}{1}", _hash, cmdToSend));
+
+            return null;
         }
 
         private string GetHash(string randomNumber)
@@ -354,27 +411,66 @@ namespace PepperDash.Essentials.Displays
 
         protected override Func<bool> PowerIsOnFeedbackFunc
         {
-            get { return () => PowerIsOn; }
+            get
+            {
+                return () =>
+                {
+                    Debug.Console(1, this, "Updating PowerIsOnFeedback to {0}", PowerIsOn);
+                    return PowerIsOn;
+                };
+            }
         }
 
         protected override Func<bool> IsCoolingDownFeedbackFunc
         {
-            get { return () => false; }
+            get { return () => _isCooling; }
         }
 
         protected override Func<bool> IsWarmingUpFeedbackFunc
         {
-            get { return () => false; }
+            get { return () => _isWarming; }
         }
 
         public override void PowerOn()
         {
+            if (PowerIsOn || _isWarming || _isCooling)
+            {
+                return;
+            }
+
+            _powerOnIgnoreFb = true;
+
             SendText(_commandBuilder.GetCommand("PON"));
+
+            _isWarming = true;
+            IsWarmingUpFeedback.FireUpdate();
+
+            WarmupTimer = new CTimer(o =>
+            {
+                _isWarming = false;
+                IsWarmingUpFeedback.FireUpdate();
+                PowerIsOn = true;
+            }, WarmupTime);
         }
 
         public override void PowerOff()
         {
+            if (!PowerIsOn || _isWarming || _isCooling)
+            {
+                return;
+            }
+
             SendText(_commandBuilder.GetCommand("POF"));
+
+            _isCooling = true;
+            IsCoolingDownFeedback.FireUpdate();
+
+            CooldownTimer = new CTimer(o =>
+            {
+                _isCooling = false;
+                PowerIsOn = false;
+                IsCoolingDownFeedback.FireUpdate();
+            }, CooldownTime);
         }
 
         public override void PowerToggle()
@@ -384,15 +480,61 @@ namespace PepperDash.Essentials.Displays
 
         public override void ExecuteSwitch(object selector)
         {
-            var handler = selector as Action;
-
-            if (handler == null)
+            /*
+             * if (_PowerIsOn)
+                (selector as Action)();
+            else // if power is off, wait until we get on FB to send it. 
             {
-                Debug.Console(1, this, "Unable to switch using selector {0}", selector);
-                return;
+                // One-time event handler to wait for power on before executing switch
+                EventHandler<FeedbackEventArgs> handler = null; // necessary to allow reference inside lambda to handler
+                handler = (o, a) =>
+                {
+                    if (!_IsWarmingUp) // Done warming
+                    {
+                        IsWarmingUpFeedback.OutputChange -= handler;
+                        (selector as Action)();
+                    }
+                };
+                IsWarmingUpFeedback.OutputChange += handler; // attach and wait for on FB
+                PowerOn();
             }
+             */
+            if (PowerIsOn)
+            {
+                var handler = selector as Action;
 
-            handler();
+                if (handler == null)
+                {
+                    Debug.Console(1, this, "Unable to switch using selector {0}", selector);
+                    return;
+                }
+
+                handler();
+            }
+            else
+            {
+                EventHandler<FeedbackEventArgs> handler = null;
+                var inputSelector = selector as Action;
+                handler = (o, a) =>
+                {
+                    if (!_isWarming)
+                    {
+                        return;
+                    }
+
+                    IsWarmingUpFeedback.OutputChange -= handler;
+
+                    if (inputSelector == null)
+                    {
+                        return;
+                    }
+
+                    inputSelector();
+                };
+
+                IsWarmingUpFeedback.OutputChange += handler;
+                PowerOn();
+            }
         }
 
         #endregion
