@@ -23,7 +23,7 @@ namespace PepperDash.Essentials.Displays
     public class PanasonicProjectorController : TwoWayDisplayBase, IBridgeAdvanced
     {
         private const long DefaultWarmUpTimeMs = 1000;
-        private const long DefautlCooldownTimeMs = 2000;
+        private const long DefaultCooldownTimeMs = 2000;
 
         private bool _isWarming;
         private bool _isCooling;
@@ -77,7 +77,7 @@ namespace PepperDash.Essentials.Displays
 
             _config = config;
 
-            if (_config.WarmupTimeInSeconds == default(long))
+            if (_config.WarmupTimeInSeconds == 0)
             {
                 WarmupTime = (uint) DefaultWarmUpTimeMs;
             }
@@ -86,13 +86,13 @@ namespace PepperDash.Essentials.Displays
                 WarmupTime = (uint) (_config.WarmupTimeInSeconds*1000);
             }
 
-            if (_config.CooldownTimeInSeconds == default(long))
+            if (_config.CooldownTimeInSeconds == 0)
             {
-                CooldownTime = (uint)DefaultWarmUpTimeMs;
+                CooldownTime = (uint)DefaultCooldownTimeMs;
             }
             else
             {
-                CooldownTime = (uint)(_config.WarmupTimeInSeconds * 1000);
+                CooldownTime = (uint)(_config.CooldownTimeInSeconds * 1000);
             }
 
             ConnectFeedback = new BoolFeedback(() => Connect);
