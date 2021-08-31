@@ -20,7 +20,7 @@ namespace PepperDash.Essentials.Displays
     /// <example>
     /// "EssentialsPluginDeviceTemplate" renamed to "SamsungMdcDevice"
     /// </example>
-    public class PanasonicProjectorController : TwoWayDisplayBase, IBridgeAdvanced
+    public class PanasonicProjectorController : TwoWayDisplayBase, IBridgeAdvanced, ICommunicationMonitor
     {
         private const long DefaultWarmUpTimeMs = 1000;
         private const long DefautlCooldownTimeMs = 2000;
@@ -96,7 +96,6 @@ namespace PepperDash.Essentials.Displays
             }
 
             ConnectFeedback = new BoolFeedback(() => Connect);
-            OnlineFeedback = new BoolFeedback(() => _commsMonitor.IsOnline);
             StatusFeedback = new IntFeedback(() => (int) _commsMonitor.Status);
 
             _comms = comms;
@@ -183,7 +182,10 @@ namespace PepperDash.Essentials.Displays
         /// <summary>
         /// Reports online feedback through the bridge
         /// </summary>
-        public BoolFeedback OnlineFeedback { get; private set; }
+        public BoolFeedback OnlineFeedback
+        {
+            get { return _commsMonitor.IsOnlineFeedback; }
+        }
 
         /// <summary>
         /// Reports socket status feedback through the bridge
@@ -578,6 +580,11 @@ namespace PepperDash.Essentials.Displays
 
                 CurrentInputFeedback.FireUpdate();
             }
+        }
+
+        public StatusMonitorBase CommunicationMonitor 
+        {
+            get { return _commsMonitor; }
         }
     }
 }
