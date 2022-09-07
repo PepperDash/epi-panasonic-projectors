@@ -6,8 +6,8 @@ using Crestron.SimplSharpPro.DeviceSupport;
 using PepperDash.Core;
 using PepperDash.Essentials.Core;
 using PepperDash.Essentials.Core.Bridges;
+using PepperDash.Essentials.Core.Queues;
 using PepperDash.Essentials.Core.Routing;
-using PepperDash_Essentials_Core.Queues;
 
 namespace PepperDash.Essentials.Displays
 {
@@ -227,12 +227,13 @@ namespace PepperDash.Essentials.Displays
             var digitalLink = new RoutingInputPort(RoutingPortNames.DmIn, eRoutingSignalType.Video,
                 eRoutingPortConnectionType.DmCat, new Action(() => SetInput(eInputTypes.Dl1)), this);
 
+
+            InputPorts.Add(hdmi1);
+            InputPorts.Add(dvi);
             InputPorts.Add(computer1);
             InputPorts.Add(computer2);
             InputPorts.Add(video);
             InputPorts.Add(sVideo);
-            InputPorts.Add(dvi);
-            InputPorts.Add(hdmi1);
             InputPorts.Add(hdmi2);
             InputPorts.Add(sdi);
             InputPorts.Add(digitalLink);
@@ -270,7 +271,7 @@ namespace PepperDash.Essentials.Displays
 
             if (!args.Client.IsConnected && !_txQueue.IsEmpty)
             {
-                _comms.Connect();
+                //_comms.Connect();
             }
         }
 
@@ -320,14 +321,14 @@ namespace PepperDash.Essentials.Displays
         private void ParseResponse(string response)
         {
             //need to calculate hash
-            if (response.Contains("ntcontrol 1"))
+            if (response.ToLower().Contains("ntcontrol 1"))
             {
                 _hash = GetHash(response);
                 DequeueAndSend(null);
                 return;
             }
 
-            if (response.Contains("ntcontrol 0"))
+            if (response.ToLower().Contains("ntcontrol 0"))
             {
                 DequeueAndSend(null);
                 return;
@@ -367,6 +368,7 @@ namespace PepperDash.Essentials.Displays
         {
             if (_txQueue.IsEmpty)
             {
+                Debug.Console(1, this, "TX Queue is emtpy");
                 return null;
             }
 

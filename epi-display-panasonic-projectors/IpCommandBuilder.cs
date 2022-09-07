@@ -14,12 +14,12 @@ namespace PepperDash.Essentials.Displays
 
         public string GetCommand(string cmd, string parameter)
         {
-            return String.Format(CommandWithParameterOnly, cmd, parameter);
+            return String.Format("00{0}:{1}{2}", cmd, parameter, Delimiter);
         }
 
         public string GetCommand(string cmd)
         {
-            return String.Format(CommandWithParameterOnly, cmd);
+            return String.Format("00{0}{1}", cmd, Delimiter);
         }
     }
 }
