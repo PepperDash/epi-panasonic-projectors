@@ -46,13 +46,8 @@ namespace PepperDash.Essentials.Displays
 
         private readonly IBasicCommunication _comms;
 
-        /// <summary>
-        /// Set this value to that of the delimiter used by the API (if applicable)
-        /// </summary>
-        private readonly string _commsDelimiter;
-
         private readonly CommunicationGather _commsGather;
-        private readonly GenericCommunicationMonitor _commsMonitor;
+        private readonly StatusMonitorBase _commsMonitor;
 
         private string _currentCommand;
 
@@ -108,9 +103,9 @@ namespace PepperDash.Essentials.Displays
                 return;
             }
 
-            _commsDelimiter = _commandBuilder.Delimiter;
+            var commsDelimiter = _commandBuilder.Delimiter;
 
-            _commsMonitor = new GenericCommunicationMonitor(this, _comms, 10000, 15000, 30000, Poll);
+            _commsMonitor = new PanasonicStatusMonitor(this, _comms, 15000, 30000);
 
             var socket = _comms as ISocketStatus;
             if (socket != null)
@@ -125,7 +120,7 @@ namespace PepperDash.Essentials.Displays
             // Only one of the below handlers should be necessary.  
 
             // _comms gather for any API that has a defined delimiter
-            _commsGather = new CommunicationGather(_comms, _commsDelimiter);
+            _commsGather = new CommunicationGather(_comms, commsDelimiter);
             _commsGather.LineReceived += Handle_LineRecieved;
 
             SetUpInputPorts();
@@ -195,6 +190,30 @@ namespace PepperDash.Essentials.Displays
         public override bool CustomActivate()
         {
             _commsMonitor.Start();
+
+            var pollTimer = new CTimer(_ =>
+            {
+                try
+                {
+                    SendText(_commandBuilder.GetCommand("QPW"));
+                }
+                catch (Exception ex)
+                {
+                    Debug.Console(1, this, Debug.ErrorLogLevel.Notice, "Caught an exception in the poll:{0}", ex.Message);
+                    throw;
+                }
+            }, null, 5000, 5000);
+
+            CrestronEnvironment.ProgramStatusEventHandler += type =>
+            {
+                if (type != eProgramStatusEventType.Stopping) 
+                    return;
+
+                pollTimer.Stop();
+                pollTimer.Dispose();
+                _commsMonitor.Stop();
+            };
+
             return base.CustomActivate();
         }
 
@@ -268,11 +287,6 @@ namespace PepperDash.Essentials.Displays
             {
                 StatusFeedback.FireUpdate();
             }
-
-            if (!args.Client.IsConnected && !_txQueue.IsEmpty)
-            {
-                //_comms.Connect();
-            }
         }
 
         private void Handle_LineRecieved(object sender, GenericCommMethodReceiveTextArgs args)
@@ -299,22 +313,22 @@ namespace PepperDash.Essentials.Displays
                 return;
             }
 
-            _txQueue.Enqueue(text);
-
-            if (!_comms.IsConnected)
+            if (_comms.IsConnected)
             {
-                _comms.Connect();
+                _currentCommand = text;
+                _comms.SendText(String.IsNullOrEmpty(_hash) ? text : String.Format("{0}{1}", _hash, text));
+            }
+            else
+            {
+                _txQueue.Enqueue(text);
+                Debug.Console(1, this, "Queue isn't empty and client isn't connected, connecting...");
+                CrestronInvoke.BeginInvoke(_ => _comms.Connect());
             }
         }
 
-        /// <summary>
-        /// Polls the device
-        /// </summary>
-        /// <remarks>
-        /// Poll method is used by the communication monitor.  Update the poll method as needed for the plugin being developed
-        /// </remarks>
         public void Poll()
         {
+            Debug.Console(1, this, "Sending poll...");
             SendText(_commandBuilder.GetCommand("QPW"));
         }
 
@@ -364,25 +378,36 @@ namespace PepperDash.Essentials.Displays
             }
         }
 
+
         private object DequeueAndSend(object notUsed)
         {
-            if (_txQueue.IsEmpty)
+            while (true)
             {
-                Debug.Console(1, this, "TX Queue is emtpy");
-                return null;
+                if (_txQueue.IsEmpty)
+                {
+                    Debug.Console(1, this, "Queue is empty we're out!");
+                    return null;
+                }
+
+                var cmdToSend = _txQueue.Dequeue(10);
+
+                if (String.IsNullOrEmpty(cmdToSend))
+                {
+                    Debug.Console(1, this, "Unable to get command to send");
+                    break;
+                }
+
+                _currentCommand = cmdToSend;
+                _comms.SendText(String.IsNullOrEmpty(_hash) ? cmdToSend : String.Format("{0}{1}", _hash, cmdToSend));
+
+                if (_comms.IsConnected) 
+                    continue;
+
+                Debug.Console(1, this, "Queue isn't empty and client isn't connected, connecting...");
+                CrestronInvoke.BeginInvoke(_ => _comms.Connect());
+                break;
             }
 
-            var cmdToSend = _txQueue.Dequeue(10);
-
-            if (String.IsNullOrEmpty(cmdToSend))
-            {
-                Debug.Console(1, this, "Unable to get command to send");
-                return null;
-            }
-
-            _currentCommand = cmdToSend;
-
-            _comms.SendText(String.IsNullOrEmpty(_hash) ? cmdToSend : String.Format("{0}{1}", _hash, cmdToSend));
 
             return null;
         }
