@@ -320,14 +320,14 @@ namespace PepperDash.Essentials.Displays
         private void ParseResponse(string response)
         {
             //need to calculate hash
-            if (response.Contains("ntcontrol 1"))
+            if (response.ToLower().Contains("ntcontrol 1"))
             {
                 _hash = GetHash(response);
                 DequeueAndSend(null);
                 return;
             }
 
-            if (response.Contains("ntcontrol 0"))
+            if (response.ToLower().Contains("ntcontrol 0"))
             {
                 DequeueAndSend(null);
                 return;
