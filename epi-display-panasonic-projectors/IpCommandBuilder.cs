@@ -19,7 +19,7 @@ namespace PepperDash.Essentials.Displays
 
         public string GetCommand(string cmd)
         {
-            return String.Format(CommandWithParameterOnly, cmd);
+            return String.Format(CommandOnly, cmd);
         }
     }
 }
