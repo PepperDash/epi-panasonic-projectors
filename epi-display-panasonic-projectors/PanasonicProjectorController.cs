@@ -70,6 +70,7 @@ namespace PepperDash.Essentials.Displays
 
             _txQueue = new CrestronQueue<string>(50);
 
+
             _config = config;
 
             if (_config.WarmupTimeInSeconds == 0)
@@ -202,7 +203,7 @@ namespace PepperDash.Essentials.Displays
                     Debug.Console(1, this, Debug.ErrorLogLevel.Notice, "Caught an exception in the poll:{0}", ex.Message);
                     throw;
                 }
-            }, null, 5000, 5000);
+            }, null, 50000, 50000);
 
             CrestronEnvironment.ProgramStatusEventHandler += type =>
             {
@@ -287,6 +288,10 @@ namespace PepperDash.Essentials.Displays
             {
                 StatusFeedback.FireUpdate();
             }
+            if (!args.Client.IsConnected && !_txQueue.IsEmpty)
+            {
+                CrestronInvoke.BeginInvoke(_ => _comms.Connect());
+            }
         }
 
         private void Handle_LineRecieved(object sender, GenericCommMethodReceiveTextArgs args)
@@ -320,6 +325,7 @@ namespace PepperDash.Essentials.Displays
             }
             else
             {
+
                 _txQueue.Enqueue(text);
                 Debug.Console(1, this, "Queue isn't empty and client isn't connected, connecting...");
                 CrestronInvoke.BeginInvoke(_ => _comms.Connect());
@@ -376,14 +382,14 @@ namespace PepperDash.Essentials.Displays
             {
                 CurrentInput = response.Replace("iis:", "").Trim();
             }
+
         }
 
 
         private object DequeueAndSend(object notUsed)
         {
-            while (true)
-            {
-                if (_txQueue.IsEmpty)
+
+               if (_txQueue.IsEmpty)
                 {
                     Debug.Console(1, this, "Queue is empty we're out!");
                     return null;
@@ -394,20 +400,12 @@ namespace PepperDash.Essentials.Displays
                 if (String.IsNullOrEmpty(cmdToSend))
                 {
                     Debug.Console(1, this, "Unable to get command to send");
-                    break;
+    
                 }
 
                 _currentCommand = cmdToSend;
                 _comms.SendText(String.IsNullOrEmpty(_hash) ? cmdToSend : String.Format("{0}{1}", _hash, cmdToSend));
-
-                if (_comms.IsConnected) 
-                    continue;
-
-                Debug.Console(1, this, "Queue isn't empty and client isn't connected, connecting...");
-                CrestronInvoke.BeginInvoke(_ => _comms.Connect());
-                break;
-            }
-
+            
 
             return null;
         }
