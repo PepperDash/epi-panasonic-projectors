@@ -106,7 +106,7 @@ namespace PepperDash.Essentials.Displays
 
             var commsDelimiter = _commandBuilder.Delimiter;
 
-            _commsMonitor = new PanasonicStatusMonitor(this, _comms, 15000, 30000);
+            _commsMonitor = new PanasonicStatusMonitor(this, _comms, 60000, 120000);
 
             var socket = _comms as ISocketStatus;
             if (socket != null)
