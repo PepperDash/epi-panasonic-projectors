@@ -20,7 +20,7 @@ namespace PepperDash.Essentials.Displays
     /// <example>
     /// "EssentialsPluginDeviceTemplate" renamed to "SamsungMdcDevice"
     /// </example>
-    public class PanasonicProjectorController : TwoWayDisplayBase, IBridgeAdvanced, ICommunicationMonitor
+    public class PanasonicProjectorController : TwoWayDisplayBase, IBridgeAdvanced, ICommunicationMonitor, IBasicVideoMuteWithFeedback
     {
         private const long DefaultWarmUpTimeMs = 1000;
         private const long DefaultCooldownTimeMs = 2000;
@@ -426,7 +426,16 @@ namespace PepperDash.Essentials.Displays
 
         public void SetInput(eInputTypes input)
         {
-            SendText(_commandBuilder.GetCommand("IIS", input.ToString().ToUpper()));
+            if (input == eInputTypes.Hd1)
+            {
+
+                SendText(_commandBuilder.GetCommand("IIS", "AU1,HD1"));
+            }
+            else
+            {
+
+                SendText(_commandBuilder.GetCommand("IIS", input.ToString().ToUpper()));
+            }
 
             CurrentInput = input.ToString();
         }
@@ -610,5 +619,22 @@ namespace PepperDash.Essentials.Displays
         {
             get { return _commsMonitor; }
         }
+
+        public void VideoMuteToggle()
+        {
+            throw new NotImplementedException();
+        }
+
+        public void VideoMuteOn()
+        {
+            SendText(_commandBuilder.GetCommand("VMT", "1"));
+        }
+
+        public void VideoMuteOff()
+        {
+            SendText(_commandBuilder.GetCommand("VMT", "0"));
+        }
+
+        public BoolFeedback VideoMuteIsOn { get; private set; }
     }
 }
