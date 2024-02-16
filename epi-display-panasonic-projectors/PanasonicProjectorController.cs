@@ -70,7 +70,6 @@ namespace PepperDash.Essentials.Displays
 
             _txQueue = new CrestronQueue<string>(50);
 
-
             _config = config;
 
             if (_config.WarmupTimeInSeconds == 0)
@@ -249,13 +248,13 @@ namespace PepperDash.Essentials.Displays
 
 
             InputPorts.Add(hdmi1);
+            InputPorts.Add(hdmi2);
+            InputPorts.Add(sdi);
             InputPorts.Add(dvi);
             InputPorts.Add(computer1);
             InputPorts.Add(computer2);
             InputPorts.Add(video);
             InputPorts.Add(sVideo);
-            InputPorts.Add(hdmi2);
-            InputPorts.Add(sdi);
             InputPorts.Add(digitalLink);
         }
 
