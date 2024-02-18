@@ -1,7 +1,9 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Text;
 using Crestron.SimplSharp;
 using Crestron.SimplSharp.Cryptography;
+using Crestron.SimplSharpPro.CrestronThread;
 using Crestron.SimplSharpPro.DeviceSupport;
 using PepperDash.Core;
 using PepperDash.Essentials.Core;
@@ -48,7 +50,7 @@ namespace PepperDash.Essentials.Displays
 
         private readonly CommunicationGather _commsGather;
         private readonly StatusMonitorBase _commsMonitor;
-
+        private readonly CTimer _pollTimer;
         private string _currentCommand;
 
         private bool _powerIsOn;
@@ -64,6 +66,20 @@ namespace PepperDash.Essentials.Displays
             IBasicCommunication comms)
             : base(key, name)
         {
+            _pollTimer = new CTimer(_ =>
+            {
+                try
+                {
+                    SendText(_commandBuilder.GetCommand("QPW"));
+                    SendText(_commandBuilder.GetCommand("QSH"));
+                }
+                catch (Exception ex)
+                {
+                    Debug.Console(1, this, Debug.ErrorLogLevel.Notice, "Caught an exception in the poll:{0}", ex.Message);
+                    throw;
+                }
+            }, null, Timeout.Infinite);
+
             Debug.Console(0, this, "Constructing new {0} instance", name);
 
             _rxQueue = new GenericQueue(String.Format("{0}-rxQueue", Key));
@@ -123,7 +139,16 @@ namespace PepperDash.Essentials.Displays
             _commsGather = new CommunicationGather(_comms, commsDelimiter);
             _commsGather.LineReceived += Handle_LineRecieved;
 
-            SetUpInputPorts();
+            if (config.Inputs == null)
+            {
+                SetUpInputPorts();
+            }
+            else
+            {
+                SetUpInputPorts(config.Inputs);
+            }
+
+            VideoMuteIsOn = new BoolFeedback(() => VideoIsMuted);
         }
 
         public bool PowerIsOn
@@ -141,6 +166,18 @@ namespace PepperDash.Essentials.Displays
                 _powerIsOn = value;
 
                 PowerIsOnFeedback.FireUpdate();
+            }
+        }
+
+        private bool _videoIsMuted;
+
+        public bool VideoIsMuted
+        {
+            get { return _videoIsMuted; }
+            set
+            {
+                _videoIsMuted = value;
+                VideoMuteIsOn.FireUpdate();
             }
         }
 
@@ -187,34 +224,37 @@ namespace PepperDash.Essentials.Displays
         /// </summary>
         public IntFeedback StatusFeedback { get; private set; }
 
+
         public override bool CustomActivate()
         {
             _commsMonitor.Start();
-
-            var pollTimer = new CTimer(_ =>
-            {
-                try
-                {
-                    SendText(_commandBuilder.GetCommand("QPW"));
-                }
-                catch (Exception ex)
-                {
-                    Debug.Console(1, this, Debug.ErrorLogLevel.Notice, "Caught an exception in the poll:{0}", ex.Message);
-                    throw;
-                }
-            }, null, 50000, 50000);
+            _pollTimer.Reset(10000, 10000);
+            
 
             CrestronEnvironment.ProgramStatusEventHandler += type =>
             {
                 if (type != eProgramStatusEventType.Stopping) 
                     return;
 
-                pollTimer.Stop();
-                pollTimer.Dispose();
+                _pollTimer.Stop();
+                _pollTimer.Dispose();
                 _commsMonitor.Stop();
             };
 
             return base.CustomActivate();
+        }
+
+        private void SetUpInputPorts(IDictionary<string, string> inputs)
+        {
+            foreach (var input in inputs)
+            {
+                var name = input.Key;
+                var command = input.Value;
+
+                var port = new RoutingInputPort(name, eRoutingSignalType.Video,
+                eRoutingPortConnectionType.Hdmi, new Action(() => SetInput(name, command)), this);
+                InputPorts.Add(port);
+            }
         }
 
         private void SetUpInputPorts()
@@ -248,13 +288,13 @@ namespace PepperDash.Essentials.Displays
 
 
             InputPorts.Add(hdmi1);
-            InputPorts.Add(hdmi2);
-            InputPorts.Add(sdi);
             InputPorts.Add(dvi);
             InputPorts.Add(computer1);
             InputPorts.Add(computer2);
             InputPorts.Add(video);
             InputPorts.Add(sVideo);
+            InputPorts.Add(hdmi2);
+            InputPorts.Add(sdi);
             InputPorts.Add(digitalLink);
         }
 
@@ -298,6 +338,8 @@ namespace PepperDash.Essentials.Displays
             _rxQueue.Enqueue(new QueueMessage(() => ParseResponse(args.Text)));
         }
 
+        private readonly object _sync = new object();
+        private readonly CEvent _waitHandle = new CEvent(true, false);
 
         /// <summary>
         /// Sends text to the device plugin comms
@@ -308,26 +350,39 @@ namespace PepperDash.Essentials.Displays
         /// <param name="text">Command to be sent</param>		
         public void SendText(string text)
         {
-            if (_config.Control.Method == eControlMethod.Com)
+            CMonitor.Enter(_sync);
+            try
             {
-                _currentCommand = text;
+                if (_config.Control.Method == eControlMethod.Com)
+                {
+                    _currentCommand = text;
 
-                _comms.SendText(text);
+                    _comms.SendText(text);
+                    _waitHandle.Wait(5000);
+                    if (_currentCommand != null)
+                    {
+                        Debug.Console(0, this, "Didn't receive a response for:{0}... discarding", _currentCommand);
+                        _currentCommand = null;
+                    }
 
-                return;
+                    return;
+                }
+
+                if (_comms.IsConnected)
+                {
+                    _currentCommand = text;
+                    _comms.SendText(String.IsNullOrEmpty(_hash) ? text : String.Format("{0}{1}", _hash, text));
+                }
+                else
+                {
+                    _txQueue.Enqueue(text, 5000);
+                    Debug.Console(1, this, "Queue isn't empty and client isn't connected, connecting...");
+                    CrestronInvoke.BeginInvoke(_ => _comms.Connect());
+                }
             }
-
-            if (_comms.IsConnected)
+            finally
             {
-                _currentCommand = text;
-                _comms.SendText(String.IsNullOrEmpty(_hash) ? text : String.Format("{0}{1}", _hash, text));
-            }
-            else
-            {
-
-                _txQueue.Enqueue(text);
-                Debug.Console(1, this, "Queue isn't empty and client isn't connected, connecting...");
-                CrestronInvoke.BeginInvoke(_ => _comms.Connect());
+                CMonitor.Exit(_sync);
             }
         }
 
@@ -339,49 +394,68 @@ namespace PepperDash.Essentials.Displays
 
         private void ParseResponse(string response)
         {
-            //need to calculate hash
-            if (response.ToLower().Contains("ntcontrol 1"))
+            try
             {
-                _hash = GetHash(response);
-                DequeueAndSend(null);
-                return;
-            }
-
-            if (response.ToLower().Contains("ntcontrol 0"))
-            {
-                DequeueAndSend(null);
-                return;
-            }
-
-            if (String.IsNullOrEmpty(_currentCommand))
-            {
-                return;
-            }
-
-            //power query
-            if (_currentCommand.ToLower().Contains("qpw")) 
-            {
-                if (_powerOnIgnoreFb && (response.Contains("001") || response.ToLower().Contains("pon")))
+                //need to calculate hash
+                if (response.ToLower().Contains("ntcontrol 1"))
                 {
-                    _powerOnIgnoreFb = false;
+                    _hash = GetHash(response);
+                    DequeueAndSend(null);
                     return;
                 }
 
-                if (!(_powerOnIgnoreFb && (response.Contains("000") || response.ToLower().Contains("pof"))))
+                if (response.ToLower().Contains("ntcontrol 0"))
                 {
+                    DequeueAndSend(null);
+                    return;
+                }
+
+                if (String.IsNullOrEmpty(_currentCommand))
+                {
+                    return;
+                }
+
+                if (_currentCommand == null)
+                    return;
+
+                //power query
+                if (_currentCommand.ToLower().Contains("qpw"))
+                {
+                    if (_powerOnIgnoreFb && (response.Contains("001") || response.ToLower().Contains("pon")))
+                    {
+                        _powerOnIgnoreFb = false;
+                        return;
+                    }
+
+                    if (!(_powerOnIgnoreFb && (response.Contains("000") || response.ToLower().Contains("pof"))))
+                    {
+                        PowerIsOn = response.Contains("001") || response.ToLower().Contains("pon");
+                        return;
+                    }
+
                     PowerIsOn = response.Contains("001") || response.ToLower().Contains("pon");
                     return;
                 }
 
-                PowerIsOn = response.Contains("001") || response.ToLower().Contains("pon");
-                return;
-            }
+                if (_currentCommand.ToLower().Contains("iis"))
+                {
+                    CurrentInput = response.Replace("iis:", "").Trim();
+                }
 
-            if (_currentCommand.ToLower().Contains("iis"))
+                if (_currentCommand.ToLower().Contains("qsh"))
+                {
+                    VideoIsMuted = response.Contains("1");
+                }
+            }
+            catch (Exception ex)
             {
-                CurrentInput = response.Replace("iis:", "").Trim();
+                Debug.Console(0, this, "Caught an exception parsing a response:{0}", ex);
             }
-
+            finally
+            {
+                _currentCommand = null;
+                _waitHandle.Set();
+            }
         }
 
 
@@ -426,18 +500,15 @@ namespace PepperDash.Essentials.Displays
 
         public void SetInput(eInputTypes input)
         {
-            if (input == eInputTypes.Hd1)
-            {
+            SetInput(input.ToString(), input.ToString());
+        }
 
-                SendText(_commandBuilder.GetCommand("IIS", "AU1,HD1"));
-            }
-            else
-            {
+        public void SetInput(string name, string command)
+        {
 
-                SendText(_commandBuilder.GetCommand("IIS", input.ToString().ToUpper()));
-            }
+            SendText(_commandBuilder.GetCommand("IIS", command.ToUpper()));
 
-            CurrentInput = input.ToString();
+            CurrentInput = name;
         }
 
         #endregion
@@ -511,6 +582,7 @@ namespace PepperDash.Essentials.Displays
         public override void PowerToggle()
         {
             SendText(_commandBuilder.GetCommand(PowerIsOn ? "POF" : "PON"));
+            _pollTimer.Reset(200, 10000);
         }
 
         public override void ExecuteSwitch(object selector)
@@ -545,6 +617,7 @@ namespace PepperDash.Essentials.Displays
                 }
 
                 handler();
+                _pollTimer.Reset(200, 10000);
             }
             else
             {
@@ -565,6 +638,7 @@ namespace PepperDash.Essentials.Displays
                     }
 
                     inputSelector();
+                    _pollTimer.Reset(200, 10000);
                 };
 
                 IsWarmingUpFeedback.OutputChange += handler;
@@ -588,6 +662,10 @@ namespace PepperDash.Essentials.Displays
         public void LinkToApi(BasicTriList trilist, uint joinStart, string joinMapKey, EiscApiAdvanced bridge)
         {
             LinkDisplayToApi(this, trilist, joinStart, joinMapKey, bridge);
+
+            var joinMap = new JoinMap(joinStart);
+            trilist.SetSigTrueAction(joinMap.VideoMuteToggle.JoinNumber, VideoMuteToggle);
+            VideoMuteIsOn.LinkInputSig(trilist.BooleanInput[joinMap.VideoMuteToggle.JoinNumber]);
         }
 
         #endregion
@@ -622,19 +700,50 @@ namespace PepperDash.Essentials.Displays
 
         public void VideoMuteToggle()
         {
-            throw new NotImplementedException();
+            if (VideoIsMuted)
+            {
+                VideoMuteOff();
+            }
+            else
+            {
+                VideoMuteOn();
+            }
+
         }
 
         public void VideoMuteOn()
         {
-            SendText(_commandBuilder.GetCommand("VMT", "1"));
+            SendText(_commandBuilder.GetCommand("OSH", "1"));
+            _pollTimer.Reset(200, 10000);
         }
 
         public void VideoMuteOff()
         {
-            SendText(_commandBuilder.GetCommand("VMT", "0"));
+            SendText(_commandBuilder.GetCommand("OSH", "0"));
+            _pollTimer.Reset(200, 10000);
         }
 
         public BoolFeedback VideoMuteIsOn { get; private set; }
+    }
+
+    public class JoinMap : JoinMapBaseAdvanced
+    {
+        public JoinMap(uint joinStart) : base(joinStart, typeof(JoinMap))
+        {
+        }
+
+        [JoinName("MuteToggle")]
+        public JoinDataComplete VideoMuteToggle = new JoinDataComplete(
+            new JoinData
+            {
+                JoinNumber = 21,
+                JoinSpan = 1
+            },
+            new JoinMetadata
+            {
+                Description = "VideoMuteOn",
+                JoinCapabilities = eJoinCapabilities.ToFromSIMPL,
+                JoinType = eJoinType.Digital
+            });
     }
 }

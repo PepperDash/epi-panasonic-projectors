@@ -24,5 +24,8 @@ namespace PepperDash.Essentials.Displays
 
         [JsonProperty("cooldownTimeInSeconds")]
         public long CooldownTimeInSeconds { get; set; }
+
+        [JsonProperty("Inputs")]
+        public Dictionary<string,string> Inputs { get; set; }
 	}
 }
